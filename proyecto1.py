@@ -1,4 +1,5 @@
 from graphviz import Digraph
+import re
 
 # Definición de clase para nodos del árbol sintáctico
 class Nodo:
@@ -76,15 +77,14 @@ def infix_a_postfix(infix):
 
 # Función para formatear la expresión regular
 def formatear(regex):
+    regex = regex.replace('+', '.*')  
+    regex = regex.replace('?', '|ε')  
+    regex = re.sub(r'\[([^\]]+)\]', lambda m: '|'.join(m.group(1)), regex)
     regex = regex.replace('(', '( ')
     regex = regex.replace(')', ' )')
     regex = regex.replace('*', ' * ')
     regex = regex.replace('.', ' . ')
     regex = regex.replace('|', ' | ')
-    regex = regex.replace('[', ' [ ')
-    regex = regex.replace(']', ' ] ')
-    regex = regex.replace('?', ' ? ')
-    regex = regex.replace('+', ' + ')
     return regex
 
 # Función para convertir de notación postfix a un Árbol Sintáctico Abstracto (AST)
