@@ -1,5 +1,4 @@
 from graphviz import Digraph
-import re
 
 class Nodo:
     def __init__(self, value):
@@ -71,18 +70,43 @@ def infix_a_postfix(infix):
     return ''.join(output)
 
 def formatear(regex):
-    regex = re.sub(r'(\w)\+', r'\1.\1*', regex) 
-    regex = re.sub(r'(\w)\?', r'\1|ε', regex)
-    regex = re.sub(r'\[([^\]]+)\]', lambda m: '|'.join(m.group(1)), regex)
+    # Convertir '+' a '.*'
     resultado = []
-    for i in range(len(regex)):
+    i = 0
+    while i < len(regex):
+        char = regex[i]
+        
+        if i < len(regex) - 1 and regex[i + 1] == '+':
+            resultado.append(char + '.' + char + '*')
+            i += 1  # Saltar el '+' ya que se ha procesado
+        elif i < len(regex) - 1 and regex[i + 1] == '?':
+            resultado.append(char + '|ε')
+            i += 1  # Saltar el '?' ya que se ha procesado
+        elif char == '[':
+            j = i + 1
+            options = []
+            while j < len(regex) and regex[j] != ']':
+                options.append(regex[j])
+                j += 1
+            resultado.append('(' + '|'.join(options) + ')')
+            i = j  # Saltar hasta después del ']', ya que se ha procesado
+        else:
+            resultado.append(char)
+
+        i += 1
+
+    # Insertar operadores de concatenación '.'
+    final_result = []
+    for i in range(len(resultado)):
         if i > 0:
+            prev, curr = resultado[i-1], resultado[i]
             # Verificar si se requiere un operador de concatenación
-            prev, curr = regex[i-1], regex[i]
             if (prev.isalnum() or prev in {'ε', ')', '*'}) and (curr.isalnum() or curr == '('):
-                resultado.append('.')
-        resultado.append(regex[i])
-    return ''.join(resultado)
+                final_result.append('.')
+        final_result.append(resultado[i])
+
+    return ''.join(final_result)
+
 
 def postfix_a_ast(postfix):
     stack = []
