@@ -13,6 +13,11 @@ class Estado:
         self.transiciones = {}
         self.epsilon_transiciones = set()
 
+def nuevo_estado(id_counter=[0]):
+    estado_id = f"s{id_counter[0]}"
+    id_counter[0] += 1
+    return Estado(estado_id)
+
 class AFN:
     def __init__(self, start, accept):
         self.start = start
@@ -44,19 +49,19 @@ class AFD:
         self.estados.add(destino)
 
 def infix_a_postfix(infix):
-    precedence = {'|': 1, '.': 2, '*': 3}
+    precedence = {'|': 1, '.': 2, '*': 3}  # Precedencia de los operadores
     output, stack = [], []
     for char in infix:
         if char == ' ':
             continue
-        if char.isalnum():
+        if char.isalnum() or char == 'ε':  # Agregar ε como literal
             output.append(char)
         elif char == '(':
             stack.append(char)
         elif char == ')':
             while stack and stack[-1] != '(':
                 output.append(stack.pop())
-            stack.pop()
+            stack.pop()  # Pop the '('
         else:
             while stack and stack[-1] != '(' and precedence.get(stack[-1], 0) >= precedence.get(char, 0):
                 output.append(stack.pop())
@@ -66,9 +71,18 @@ def infix_a_postfix(infix):
     return ''.join(output)
 
 def formatear(regex):
-    regex = regex.replace('+', '.*').replace('?', '|ε')
+    regex = re.sub(r'(\w)\+', r'\1.\1*', regex) 
+    regex = re.sub(r'(\w)\?', r'\1|ε', regex)
     regex = re.sub(r'\[([^\]]+)\]', lambda m: '|'.join(m.group(1)), regex)
-    return regex.replace('(', '( ').replace(')', ' )').replace('*', ' * ').replace('.', ' . ').replace('|', ' | ')
+    resultado = []
+    for i in range(len(regex)):
+        if i > 0:
+            # Verificar si se requiere un operador de concatenación
+            prev, curr = regex[i-1], regex[i]
+            if (prev.isalnum() or prev in {'ε', ')', '*'}) and (curr.isalnum() or curr == '('):
+                resultado.append('.')
+        resultado.append(regex[i])
+    return ''.join(resultado)
 
 def postfix_a_ast(postfix):
     stack = []
@@ -83,10 +97,10 @@ def postfix_a_ast(postfix):
     return stack.pop()
 
 def construir_afn_thompson(node):
-    if node.value == '|':
+    if node.value == '|':  # Unión
         left_afn = construir_afn_thompson(node.left)
         right_afn = construir_afn_thompson(node.right)
-        start, accept = Estado(f"s{len(left_afn.estados) + len(right_afn.estados)}"), Estado(f"s{len(left_afn.estados) + len(right_afn.estados) + 1}")
+        start, accept = nuevo_estado(), nuevo_estado()
         afn = AFN(start, accept)
         afn.agregar_transicion_epsilon(start, left_afn.start)
         afn.agregar_transicion_epsilon(start, right_afn.start)
@@ -95,29 +109,38 @@ def construir_afn_thompson(node):
         afn.estados.update(left_afn.estados)
         afn.estados.update(right_afn.estados)
         return afn
-    elif node.value == '.':
+    
+    elif node.value == '.':  # Concatenación
         left_afn = construir_afn_thompson(node.left)
         right_afn = construir_afn_thompson(node.right)
         afn = AFN(left_afn.start, right_afn.accept)
         afn.agregar_transicion_epsilon(left_afn.accept, right_afn.start)
+    # Actualizar el conjunto de estados
         afn.estados.update(left_afn.estados)
         afn.estados.update(right_afn.estados)
         return afn
-    elif node.value == '*':
+
+
+    elif node.value == '*':  # Kleene Star
         sub_afn = construir_afn_thompson(node.left)
-        start, accept = Estado(f"s{len(sub_afn.estados)}"), Estado(f"s{len(sub_afn.estados) + 1}")
+        start, accept = nuevo_estado(), nuevo_estado()
         afn = AFN(start, accept)
         afn.agregar_transicion_epsilon(start, sub_afn.start)
         afn.agregar_transicion_epsilon(sub_afn.accept, accept)
         afn.agregar_transicion_epsilon(start, accept)
         afn.agregar_transicion_epsilon(sub_afn.accept, sub_afn.start)
+
+    # Asegúrate de que todos los estados estén incluidos
         afn.estados.update(sub_afn.estados)
+    
         return afn
-    else:
-        start, accept = Estado(f"s{node.value}_start"), Estado(f"s{node.value}_accept")
+
+    else:  # Símbolo literal
+        start, accept = nuevo_estado(), nuevo_estado()
         afn = AFN(start, accept)
         afn.agregar_transicion(start, node.value, accept)
         return afn
+
 
 def construir_afd_afn(afn):
     start_closure = epsilon_closure({afn.start})
@@ -248,6 +271,7 @@ def draw_afd(afd, filename='afd'):
 
 
 def main():
+    global estado_counter
     with open('input.txt', 'r') as file:
         for regex in file:
             regex = regex.strip()
@@ -255,11 +279,13 @@ def main():
             postfix = infix_a_postfix(formatted_regex)
             ast_root = postfix_a_ast(postfix)
             draw_ast(ast_root, filename='ast')
+            estado_counter = 0
             afn = construir_afn_thompson(ast_root)
             draw_afn(afn, filename='afn')
             afd = construir_afd_afn(afn)
-            afd_min = minimizar_afd(afd)  # Minimizar el AFD antes de dibujarlo
-            draw_afd(afd_min, filename='afd_min')  # Dibuja el AFD minimizado
+            afd_min = minimizar_afd(afd)
+            draw_afd(afd_min, filename='afd_min')
+            
             cadena = input(f"Ingrese una cadena para verificar con la expresión '{regex}': ")
             print(f"La cadena '{cadena}' es {'aceptada' if simular_afn(afn, cadena) else 'NO aceptada'} por el AFN.")
 
