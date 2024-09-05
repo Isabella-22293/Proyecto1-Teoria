@@ -17,3 +17,12 @@ Objetivos
   o Implementación de simulación de AFD.
 Video
 https://youtu.be/IGf81CqiVms
+
+# Uso
+1. Input: Se debe tener un archivo input.txt en el mismo directorio del script con las expresiones regulares que se quieren procesar.
+2. Ejecutar el Script: Se ejecuta el archivo proyecto1.py para procesar las expresiones y generar las visualizaciones.
+3. Ingresar Cadenas: Se debe ingresar una cadena para verificar si es aceptada por los autómatas generado.
+
+# Requisitos
+Python 3.x
+Biblioteca Graphviz y su entorno de ejecución.
