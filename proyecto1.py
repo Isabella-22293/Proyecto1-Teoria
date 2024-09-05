@@ -68,7 +68,7 @@ def infix_a_postfix(infix):
     while stack:
         output.append(stack.pop())
     return ''.join(output)
-
+ 
 def formatear(regex):
     # Almacenar la expresión formateada
     resultado = []
@@ -97,6 +97,7 @@ def formatear(regex):
                 final_resultado.append('.')
     
     return ''.join(final_resultado)
+
 
 def postfix_a_ast(postfix):
     stack = []
@@ -146,6 +147,7 @@ def construir_afn_thompson(node):
         sub_afn = construir_afn_thompson(node.left)
         start, accept = nuevo_estado(), nuevo_estado()
         afn = AFN(start, accept)
+
         afn.agregar_transicion_epsilon(start, sub_afn.start)
         afn.agregar_transicion_epsilon(sub_afn.accept, accept)
         afn.agregar_transicion_epsilon(start, accept)
