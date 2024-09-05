@@ -70,55 +70,54 @@ def infix_a_postfix(infix):
     return ''.join(output)
 
 def formatear(regex):
-    # Convertir '+' a '.*'
+    # Almacenar la expresión formateada
     resultado = []
     i = 0
     while i < len(regex):
-        char = regex[i]
-        
-        if i < len(regex) - 1 and regex[i + 1] == '+':
-            resultado.append(char + '.' + char + '*')
-            i += 1  # Saltar el '+' ya que se ha procesado
-        elif i < len(regex) - 1 and regex[i + 1] == '?':
-            resultado.append(char + '|ε')
-            i += 1  # Saltar el '?' ya que se ha procesado
-        elif char == '[':
-            j = i + 1
-            options = []
-            while j < len(regex) and regex[j] != ']':
-                options.append(regex[j])
-                j += 1
-            resultado.append('(' + '|'.join(options) + ')')
-            i = j  # Saltar hasta después del ']', ya que se ha procesado
-        else:
-            resultado.append(char)
-
-        i += 1
-
-    # Insertar operadores de concatenación '.'
-    final_result = []
+        if regex[i] == '\\':  # Manejar caracteres escapados
+            resultado.append(regex[i:i + 2])
+            i += 2
+        elif regex[i] in {'*', '+', '?', '|', '(', ')'}:  # Operadores especiales y paréntesis
+            resultado.append(regex[i])
+            i += 1
+        else:  # Caracteres normales
+            resultado.append(regex[i])
+            i += 1
+    
+    # Preparar para insertar operadores de concatenación
+    final_resultado = []
     for i in range(len(resultado)):
-        if i > 0:
-            prev, curr = resultado[i-1], resultado[i]
-            # Verificar si se requiere un operador de concatenación
-            if (prev.isalnum() or prev in {'ε', ')', '*'}) and (curr.isalnum() or curr == '('):
-                final_result.append('.')
-        final_result.append(resultado[i])
-
-    return ''.join(final_result)
-
+        final_resultado.append(resultado[i])
+        # No insertar un '.' después de operadores especiales o antes de '|' y ')'
+        if i < len(resultado) - 1:
+            prev, curr = resultado[i], resultado[i + 1]
+            # Agregar un '.' cuando es necesario
+            if (prev not in {'(', '|'} and
+                curr not in {')', '*', '+', '?', '|'}):
+                final_resultado.append('.')
+    
+    return ''.join(final_resultado)
 
 def postfix_a_ast(postfix):
     stack = []
     for char in postfix:
         node = Nodo(char)
-        if char in {'|', '.'}:
+        if char in {'|', '.'}:  # Operadores binarios
+            if len(stack) < 2:
+                raise ValueError("Not enough operands for binary operator")
             node.right = stack.pop()
             node.left = stack.pop()
-        elif char == '*':
+        elif char == '*':  # Operador unario
+            if len(stack) < 1:
+                raise ValueError("Not enough operands for unary operator")
             node.left = stack.pop()
         stack.append(node)
+    
+    if len(stack) != 1:
+        raise ValueError("The postfix expression did not produce a valid AST")
+    
     return stack.pop()
+
 
 def construir_afn_thompson(node):
     if node.value == '|':  # Unión
@@ -139,11 +138,9 @@ def construir_afn_thompson(node):
         right_afn = construir_afn_thompson(node.right)
         afn = AFN(left_afn.start, right_afn.accept)
         afn.agregar_transicion_epsilon(left_afn.accept, right_afn.start)
-    # Actualizar el conjunto de estados
         afn.estados.update(left_afn.estados)
         afn.estados.update(right_afn.estados)
         return afn
-
 
     elif node.value == '*':  # Kleene Star
         sub_afn = construir_afn_thompson(node.left)
@@ -153,10 +150,7 @@ def construir_afn_thompson(node):
         afn.agregar_transicion_epsilon(sub_afn.accept, accept)
         afn.agregar_transicion_epsilon(start, accept)
         afn.agregar_transicion_epsilon(sub_afn.accept, sub_afn.start)
-
-    # Asegúrate de que todos los estados estén incluidos
         afn.estados.update(sub_afn.estados)
-    
         return afn
 
     else:  # Símbolo literal
@@ -164,7 +158,6 @@ def construir_afn_thompson(node):
         afn = AFN(start, accept)
         afn.agregar_transicion(start, node.value, accept)
         return afn
-
 
 def construir_afd_afn(afn):
     start_closure = epsilon_closure({afn.start})
@@ -235,15 +228,13 @@ def draw_afn(afn, filename='afn'):
     dot.render(filename, format='png', cleanup=True)
     print(f"AFN generado y guardado en {filename}.png")
 
-# Función para minimizar el AFD
 def minimizar_afd(afd):
-    # Particionar estados en aceptadores y no aceptadores
     P = [{estado for estado in afd.estados if estado != afd.accept}, {afd.accept}]
     W = [{afd.accept}]
     
     while W:
         A = W.pop()
-        for simbolo in afd.transiciones[next(iter(afd.transiciones))].keys():  # Considerar todos los símbolos
+        for simbolo in set(simbolo for estado in afd.estados for simbolo in afd.transiciones.get(estado, {})):
             X = {estado for estado in afd.estados if simbolo in afd.transiciones.get(estado, {}) and afd.transiciones[estado][simbolo] in A}
             new_P = []
             for Y in P:
@@ -261,7 +252,6 @@ def minimizar_afd(afd):
                         W.append(interseccion if len(interseccion) <= len(diferencia) else diferencia)
             P.extend(new_P)
     
-    # Crear nuevo AFD minimizado
     estado_map = {frozenset(part): Estado(f"s{index}") for index, part in enumerate(P)}
     afd_min = AFD(estado_map[frozenset({afd.start})], estado_map[frozenset({afd.accept})])
     
@@ -274,25 +264,27 @@ def minimizar_afd(afd):
     
     return afd_min
 
-# Dibuja el AFD utilizando graphviz
 def draw_afd(afd, filename='afd'):
     dot = Digraph()
 
-    # Convertir el estado a una cadena para su representación
+    # Dibujar los nodos del AFD
     for estado in afd.estados:
-        estado_str = estado.id  # Utiliza directamente el id del estado
-        dot.node(estado_str, shape='doublecircle' if estado == afd.accept else 'circle')
+        # Aquí, estado es un frozenset, así que necesitamos extraer el id del primer estado en el frozenset
+        estado_id = next(iter(estado)).id
+        dot.node(estado_id, shape='doublecircle' if estado == afd.accept else 'circle')
 
-    # Dibujar transiciones
+    # Dibujar las transiciones del AFD
     for estado, transiciones in afd.transiciones.items():
-        estado_str = estado.id  # Utiliza directamente el id del estado
+        estado_id = next(iter(estado)).id  # Obtener el id del primer estado en el frozenset
         for simbolo, destino in transiciones.items():
-            destino_str = destino.id  # Utiliza directamente el id del destino
-            dot.edge(estado_str, destino_str, label=simbolo)
+            destino_id = next(iter(destino)).id  # Obtener el id del primer estado en el frozenset
+            dot.edge(estado_id, destino_id, label=simbolo)
 
     dot.render(filename, format='png', cleanup=True)  # Guarda el AFD en un archivo 'filename.png'
     print(f"AFD generado y guardado en {filename}.png")
 
+def draw_afd_normal(afd, filename='afd_normal'):
+    draw_afd(afd, filename)  # Usa la misma función para dibujar el AFD normal
 
 def main():
     global estado_counter
@@ -307,6 +299,7 @@ def main():
             afn = construir_afn_thompson(ast_root)
             draw_afn(afn, filename='afn')
             afd = construir_afd_afn(afn)
+            draw_afd_normal(afd, filename='afd_normal')  # Generar y guardar el AFD normal
             afd_min = minimizar_afd(afd)
             draw_afd(afd_min, filename='afd_min')
             
