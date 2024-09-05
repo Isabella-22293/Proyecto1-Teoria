@@ -70,33 +70,40 @@ def infix_a_postfix(infix):
     return ''.join(output)
  
 def formatear(regex):
-    # Almacenar la expresión formateada
+    # Transformar '+' en '.*'
     resultado = []
     i = 0
     while i < len(regex):
-        if regex[i] == '\\':  # Manejar caracteres escapados
-            resultado.append(regex[i:i + 2])
-            i += 2
-        elif regex[i] in {'*', '+', '?', '|', '(', ')'}:  # Operadores especiales y paréntesis
+        if i < len(regex) - 1 and regex[i + 1] == '+':
+            resultado.append(regex[i] + '.' + regex[i] + '*')
+            i += 2  # Saltar el símbolo actual y el '+'
+        elif i < len(regex) - 1 and regex[i + 1] == '?':
+            resultado.append(regex[i] + '|ε')
+            i += 2  # Saltar el símbolo actual y el '?'
+        elif regex[i] == '[':
+            j = i + 1
+            conjunto = []
+            while j < len(regex) and regex[j] != ']':
+                conjunto.append(regex[j])
+                j += 1
+            resultado.append('(' + '|'.join(conjunto) + ')')
+            i = j + 1  # Saltar hasta después de ']'
+        else:
             resultado.append(regex[i])
             i += 1
-        else:  # Caracteres normales
-            resultado.append(regex[i])
-            i += 1
-    
-    # Preparar para insertar operadores de concatenación
+
+    # Insertar el operador de concatenación '.'
     final_resultado = []
     for i in range(len(resultado)):
-        final_resultado.append(resultado[i])
-        # No insertar un '.' después de operadores especiales o antes de '|' y ')'
-        if i < len(resultado) - 1:
-            prev, curr = resultado[i], resultado[i + 1]
-            # Agregar un '.' cuando es necesario
-            if (prev not in {'(', '|'} and
-                curr not in {')', '*', '+', '?', '|'}):
+        if i > 0:
+            prev, curr = resultado[i - 1][-1], resultado[i][0]
+            # Verificar si se requiere un operador de concatenación
+            if (prev.isalnum() or prev in {'ε', ')', '*'}) and (curr.isalnum() or curr == '('):
                 final_resultado.append('.')
+        final_resultado.append(resultado[i])
     
     return ''.join(final_resultado)
+
 
 
 def postfix_a_ast(postfix):
@@ -134,19 +141,20 @@ def construir_afn_thompson(node):
         afn.estados.update(right_afn.estados)
         return afn
 
-
     elif node.value == '*':  # Kleene Star
         sub_afn = construir_afn_thompson(node.left)
         start, accept = nuevo_estado(), nuevo_estado()
         afn = AFN(start, accept)
-        afn.agregar_transicion_epsilon(start, sub_afn.start)
-        afn.agregar_transicion_epsilon(sub_afn.accept, accept)
-        afn.agregar_transicion_epsilon(start, accept)
-        afn.agregar_transicion_epsilon(sub_afn.accept, sub_afn.start)
-
-    # Asegúrate de que todos los estados estén incluidos
+        # Transiciones epsilon necesarias para el operador Kleene Star
+        afn.agregar_transicion_epsilon(start, sub_afn.start)  # De inicio a la subexpresión
+        afn.agregar_transicion_epsilon(start, accept)  # De inicio a aceptación (permitir vacío)
+        afn.agregar_transicion_epsilon(sub_afn.accept, sub_afn.start)  
+        afn.agregar_transicion_epsilon(sub_afn.accept, accept)  
+        
+        # Asegurar que todos los estados estén incluidos
         afn.estados.update(sub_afn.estados)
-    
+        afn.estados.add(start)
+        afn.estados.add(accept)
         return afn
 
     else:  # Símbolo literal
