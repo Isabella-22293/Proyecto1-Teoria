@@ -68,44 +68,35 @@ def infix_a_postfix(infix):
     while stack:
         output.append(stack.pop())
     return ''.join(output)
-
+ 
 def formatear(regex):
-    # Convertir '+' a '.*'
+    # Almacenar la expresión formateada
     resultado = []
     i = 0
     while i < len(regex):
-        char = regex[i]
-        
-        if i < len(regex) - 1 and regex[i + 1] == '+':
-            resultado.append(char + '.' + char + '*')
-            i += 1  # Saltar el '+' ya que se ha procesado
-        elif i < len(regex) - 1 and regex[i + 1] == '?':
-            resultado.append(char + '|ε')
-            i += 1  # Saltar el '?' ya que se ha procesado
-        elif char == '[':
-            j = i + 1
-            options = []
-            while j < len(regex) and regex[j] != ']':
-                options.append(regex[j])
-                j += 1
-            resultado.append('(' + '|'.join(options) + ')')
-            i = j  # Saltar hasta después del ']', ya que se ha procesado
-        else:
-            resultado.append(char)
-
-        i += 1
-
-    # Insertar operadores de concatenación '.'
-    final_result = []
+        if regex[i] == '\\':  # Manejar caracteres escapados
+            resultado.append(regex[i:i + 2])
+            i += 2
+        elif regex[i] in {'*', '+', '?', '|', '(', ')'}:  # Operadores especiales y paréntesis
+            resultado.append(regex[i])
+            i += 1
+        else:  # Caracteres normales
+            resultado.append(regex[i])
+            i += 1
+    
+    # Preparar para insertar operadores de concatenación
+    final_resultado = []
     for i in range(len(resultado)):
-        if i > 0:
-            prev, curr = resultado[i-1], resultado[i]
-            # Verificar si se requiere un operador de concatenación
-            if (prev.isalnum() or prev in {'ε', ')', '*'}) and (curr.isalnum() or curr == '('):
-                final_result.append('.')
-        final_result.append(resultado[i])
-
-    return ''.join(final_result)
+        final_resultado.append(resultado[i])
+        # No insertar un '.' después de operadores especiales o antes de '|' y ')'
+        if i < len(resultado) - 1:
+            prev, curr = resultado[i], resultado[i + 1]
+            # Agregar un '.' cuando es necesario
+            if (prev not in {'(', '|'} and
+                curr not in {')', '*', '+', '?', '|'}):
+                final_resultado.append('.')
+    
+    return ''.join(final_resultado)
 
 
 def postfix_a_ast(postfix):
@@ -139,7 +130,6 @@ def construir_afn_thompson(node):
         right_afn = construir_afn_thompson(node.right)
         afn = AFN(left_afn.start, right_afn.accept)
         afn.agregar_transicion_epsilon(left_afn.accept, right_afn.start)
-    # Actualizar el conjunto de estados
         afn.estados.update(left_afn.estados)
         afn.estados.update(right_afn.estados)
         return afn
@@ -306,9 +296,7 @@ def main():
             estado_counter = 0
             afn = construir_afn_thompson(ast_root)
             draw_afn(afn, filename='afn')
-            afd = construir_afd_afn(afn)
-            afd_min = minimizar_afd(afd)
-            draw_afd(afd_min, filename='afd_min')
+            ##quitar implementación de afd y min 
             
             cadena = input(f"Ingrese una cadena para verificar con la expresión '{regex}': ")
             print(f"La cadena '{cadena}' es {'aceptada' if simular_afn(afn, cadena) else 'NO aceptada'} por el AFN.")
